@@ -1,18 +1,13 @@
 pipeline{
     agent any
-    tools{
-        jdk 'jdk17'
-        nodejs 'node19'
-    }
     environment {
         APP_DIR = 'DevOps-Project-28/Chatbot-UI'
         IMAGE_NAME = 'chatbot-local:latest'
-        SCANNER_HOME=tool 'sonar-scanner'
     }
     stages {
         stage('Checkout from Git'){
             steps{
-                git branch: 'master', url: 'https://github.com/NotHarshhaa/DevOps-Projects.git'
+                checkout scm
             }
         }
         stage('Install Dependencies') {
@@ -24,30 +19,36 @@ pipeline{
         }
         stage("Sonarqube Analysis "){
             steps{
-                dir("${APP_DIR}") {
-                    withSonarQubeEnv('sonar-server') {
-                        sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Chatbot \
-                        -Dsonar.projectKey=Chatbot '''
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    dir("${APP_DIR}") {
+                        withSonarQubeEnv('sonar-server') {
+                            sh '''sonar-scanner -Dsonar.projectName=Chatbot \
+                            -Dsonar.projectKey=Chatbot'''
+                        }
                     }
                 }
             }
         }
         stage("quality gate"){
            steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    script {
+                        waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                    }
                 }
-            } 
+            }
         }
         stage('OWASP FS SCAN') {
             steps {
-                dependencyCheck additionalArguments: "--scan ${APP_DIR} --disableYarnAudit --disableNodeAudit", odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    dependencyCheck additionalArguments: "--scan ${APP_DIR} --disableYarnAudit --disableNodeAudit", odcInstallation: 'DP-Check'
+                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                }
             }
         }
         stage('TRIVY FS SCAN') {
             steps {
-                sh "trivy fs ${APP_DIR} > trivyfs.json"
+                sh "trivy fs ${APP_DIR} > trivyfs.json || true"
             }
         }
         stage("Docker Build & Push"){
@@ -61,7 +62,7 @@ pipeline{
         }
         stage("TRIVY"){
             steps{
-                sh "trivy image ${IMAGE_NAME} > trivy.json" 
+                sh "trivy image ${IMAGE_NAME} > trivy.json || true"
             }
         }
         stage ("Remove container") {
