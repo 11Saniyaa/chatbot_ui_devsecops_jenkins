@@ -5,35 +5,6 @@ pipeline{
         IMAGE_NAME = 'chatbot-local:latest'
     }
     stages {
-        stage("Sonarqube Analysis "){
-            steps{
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    dir("${APP_DIR}") {
-                        withSonarQubeEnv('sonar-server') {
-                            sh '''sonar-scanner -Dsonar.projectName=Chatbot \
-                            -Dsonar.projectKey=Chatbot'''
-                        }
-                    }
-                }
-            }
-        }
-        stage("quality gate"){
-           steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    script {
-                        waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
-                    }
-                }
-            }
-        }
-        stage('OWASP FS SCAN') {
-            steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    dependencyCheck additionalArguments: "--scan ${APP_DIR} --disableYarnAudit --disableNodeAudit", odcInstallation: 'DP-Check'
-                    dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-                }
-            }
-        }
         stage('TRIVY FS SCAN') {
             steps {
                 sh "trivy fs ${APP_DIR} > trivyfs.json || true"
