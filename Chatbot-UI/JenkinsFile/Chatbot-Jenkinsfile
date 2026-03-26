@@ -1,0 +1,79 @@
+pipeline{
+    agent any
+    tools{
+        jdk 'jdk17'
+        nodejs 'node19'
+    }
+    environment {
+        APP_DIR = 'DevOps-Project-28/Chatbot-UI'
+        IMAGE_NAME = 'chatbot-local:latest'
+        SCANNER_HOME=tool 'sonar-scanner'
+    }
+    stages {
+        stage('Checkout from Git'){
+            steps{
+                git branch: 'master', url: 'https://github.com/NotHarshhaa/DevOps-Projects.git'
+            }
+        }
+        stage('Install Dependencies') {
+            steps {
+                dir("${APP_DIR}") {
+                    sh "npm install"
+                }
+            }
+        }
+        stage("Sonarqube Analysis "){
+            steps{
+                dir("${APP_DIR}") {
+                    withSonarQubeEnv('sonar-server') {
+                        sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Chatbot \
+                        -Dsonar.projectKey=Chatbot '''
+                    }
+                }
+            }
+        }
+        stage("quality gate"){
+           steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                }
+            } 
+        }
+        stage('OWASP FS SCAN') {
+            steps {
+                dependencyCheck additionalArguments: "--scan ${APP_DIR} --disableYarnAudit --disableNodeAudit", odcInstallation: 'DP-Check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+        stage('TRIVY FS SCAN') {
+            steps {
+                sh "trivy fs ${APP_DIR} > trivyfs.json"
+            }
+        }
+        stage("Docker Build & Push"){
+            steps{
+                script{
+                    dir("${APP_DIR}") {
+                        sh "docker build -t ${IMAGE_NAME} ."
+                    }
+                }
+            }
+        }
+        stage("TRIVY"){
+            steps{
+                sh "trivy image ${IMAGE_NAME} > trivy.json" 
+            }
+        }
+        stage ("Remove container") {
+            steps{
+                sh "docker stop chatbot | true"
+                sh "docker rm chatbot | true"
+             }
+        }
+        stage('Deploy to container'){
+            steps{
+                sh 'docker run -d --name chatbot -p 3000:3000 ${IMAGE_NAME}'
+            }
+        }
+    }
+    }
