@@ -1,22 +1,10 @@
 pipeline{
     agent any
     environment {
-        APP_DIR = 'DevOps-Project-28/Chatbot-UI'
+        APP_DIR = 'Chatbot-UI'
         IMAGE_NAME = 'chatbot-local:latest'
     }
     stages {
-        stage('Checkout from Git'){
-            steps{
-                checkout scm
-            }
-        }
-        stage('Install Dependencies') {
-            steps {
-                dir("${APP_DIR}") {
-                    sh "npm install"
-                }
-            }
-        }
         stage("Sonarqube Analysis "){
             steps{
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
